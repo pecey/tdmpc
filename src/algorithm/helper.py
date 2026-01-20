@@ -222,10 +222,12 @@ class ReplayBuffer():
 			max_priority = self._priorities.max().to(self.device).item()
 		else:
 			max_priority = 1. if self.idx == 0 else self._priorities[:self.idx].max().to(self.device).item()
+		print(f"Max priority for new episode: {max_priority}")
 		mask = torch.arange(self.cfg.episode_length) >= self.cfg.episode_length-self.cfg.horizon
 		new_priorities = torch.full((self.cfg.episode_length,), max_priority, device=self.device)
 		new_priorities[mask] = 0
 		self._priorities[self.idx:self.idx+self.cfg.episode_length] = new_priorities
+		
 		self.idx = (self.idx + self.cfg.episode_length) % self.capacity
 		self._full = self._full or self.idx == 0
 
@@ -247,9 +249,16 @@ class ReplayBuffer():
 
 	def sample(self):
 		probs = (self._priorities if self._full else self._priorities[:self.idx]) ** self.cfg.per_alpha
-		probs /= probs.sum()
+		probs_np = np.nan_to_num(probs.cpu().numpy())
+		probs_np /= probs_np.sum()
+		if np.isnan(probs_np).any():
+			print(probs_np)
+			print(np.nan_to_num(probs_np, nan=0.0, posinf=0.0, neginf=0.0))
 		total = len(probs)
-		idxs = torch.from_numpy(np.random.choice(total, self.cfg.batch_size, p=probs.cpu().numpy(), replace=not self._full)).to(self.device)
+		try:
+			idxs = torch.from_numpy(np.random.choice(total, self.cfg.batch_size, p=probs_np, replace=not self._full)).to(self.device)
+		except ValueError as e:
+			print(e)
 		weights = (total * probs[idxs]) ** (-self.cfg.per_beta)
 		weights /= weights.max()
 

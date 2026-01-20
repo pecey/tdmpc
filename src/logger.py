@@ -9,7 +9,7 @@ from termcolor import colored
 from omegaconf import OmegaConf
 
 
-CONSOLE_FORMAT = [('episode', 'E', 'int'), ('env_step', 'S', 'int'), ('episode_reward', 'R', 'float'), ('total_time', 'T', 'time')]
+CONSOLE_FORMAT = [('episode', 'E', 'int'), ('env_step', 'S', 'int'), ('decision_step', 'D', 'int'), ('episode_reward', 'R', 'float'), ('total_time', 'T', 'time')]
 AGENT_METRICS = ['consistency_loss', 'reward_loss', 'value_loss', 'total_loss', 'weighted_loss', 'pi_loss', 'grad_norm']
 
 
@@ -30,7 +30,8 @@ def print_run(cfg, reward=None):
 	def pprint(k, v):
 		print(prefix + colored(f'{k.capitalize()+":":<16}', color, attrs=attrs), limstr(v))
 	kvs = [('task', cfg.task_title),
-		   ('train steps', f'{int(cfg.train_steps*cfg.action_repeat):,}'),
+		#    ('train steps', f'{int(cfg.train_steps*cfg.action_repeat):,}'),
+		   ('train steps', f'{int(cfg.train_steps):,}'),
 		   ('observations', 'x'.join([str(s) for s in cfg.obs_shape])),
 		   ('actions', cfg.action_dim),
 		   ('experiment', cfg.exp_name)]
@@ -98,7 +99,7 @@ class Logger(object):
 				import wandb
 				wandb.init(project=project,
 						entity=entity,
-						name=str(cfg.seed),
+						name=cfg.wandb_run_name,
 						group=self._group,
 						tags=cfg_to_group(cfg, return_list=True) + [f'seed:{cfg.seed}'],
 						dir=self._log_dir,

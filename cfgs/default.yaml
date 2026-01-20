@@ -1,10 +1,12 @@
 # environment
-task: quadruped-run
+task: hopper-hop
 modality: 'state'
-action_repeat: ???
+# action_repeat: 
 discount: 0.99
 episode_length: 1000/${action_repeat}
+# episode_length: 1000
 train_steps: 500000/${action_repeat}
+# train_steps: 500000
 
 # planning
 iterations: 6
@@ -40,9 +42,10 @@ mlp_dim: 512
 latent_dim: 50
 
 # wandb (insert your own)
-use_wandb: false
-wandb_project: none
-wandb_entity: none
+use_wandb: true
+wandb_project: tdmpc-${task}
+wandb_entity: pecey
+wandb_run_name: default
 
 # misc
 seed: 1
@@ -51,3 +54,12 @@ eval_freq: 20000
 eval_episodes: 10
 save_video: false
 save_model: false
+
+# custom
+use_policy: true
+use_val_backup: true
+
+# tea
+tea: false
+min_dt: 0.02
+max_dt: 0.08

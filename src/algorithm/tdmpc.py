@@ -77,19 +77,32 @@ class TDMPC():
 		self.model.load_state_dict(d['model'])
 		self.model_target.load_state_dict(d['model_target'])
 
+	# @torch.no_grad()
+	# def estimate_value(self, z, actions, horizon, use_val_backup=False):
+	# 	"""Estimate value of a trajectory starting at latent state z and executing given actions."""
+	# 	G, discount = 0, 1
+	# 	for t in range(horizon):
+	# 		z, reward = self.model.next(z, actions[t])
+	# 		G += discount * reward
+	# 		discount *= self.cfg.discount
+	# 	G += discount * torch.min(*self.model.Q(z, self.model.pi(z, self.cfg.min_std)))
+	# 	return G
+
 	@torch.no_grad()
-	def estimate_value(self, z, actions, horizon):
+	def estimate_value(self, z, actions, horizon, use_val_backup=False):
 		"""Estimate value of a trajectory starting at latent state z and executing given actions."""
 		G, discount = 0, 1
 		for t in range(horizon):
 			z, reward = self.model.next(z, actions[t])
 			G += discount * reward
 			discount *= self.cfg.discount
-		G += discount * torch.min(*self.model.Q(z, self.model.pi(z, self.cfg.min_std)))
+		if use_val_backup:
+			G += discount * torch.min(*self.model.Q(z, self.model.pi(z, self.cfg.min_std)))
 		return G
 
+
 	@torch.no_grad()
-	def plan(self, obs, eval_mode=False, step=None, t0=True):
+	def plan(self, obs, eval_mode=False, step=None, t0=True, use_policy=True, use_val_backup=True):
 		"""
 		Plan next action using TD-MPC inference.
 		obs: raw input observation.
@@ -104,7 +117,14 @@ class TDMPC():
 		# Sample policy trajectories
 		obs = torch.tensor(obs, dtype=torch.float32, device=self.device).unsqueeze(0)
 		horizon = int(min(self.cfg.horizon, h.linear_schedule(self.cfg.horizon_schedule, step)))
-		num_pi_trajs = int(self.cfg.mixture_coef * self.cfg.num_samples)
+		# num_pi_trajs = int(self.cfg.mixture_coef * self.cfg.num_samples)
+
+		# Flag to disable policy and simply using CEM
+		if use_policy:
+			num_pi_trajs = int(self.cfg.mixture_coef * self.cfg.num_samples)
+		else:
+			num_pi_trajs = 0
+
 		if num_pi_trajs > 0:
 			pi_actions = torch.empty(horizon, num_pi_trajs, self.cfg.action_dim, device=self.device)
 			z = self.model.h(obs).repeat(num_pi_trajs, 1)
@@ -127,7 +147,7 @@ class TDMPC():
 				actions = torch.cat([actions, pi_actions], dim=1)
 
 			# Compute elite actions
-			value = self.estimate_value(z, actions, horizon).nan_to_num_(0)
+			value = self.estimate_value(z, actions, horizon, use_val_backup=use_val_backup).nan_to_num_(0)
 			elite_idxs = torch.topk(value.squeeze(1), self.cfg.num_elites, dim=0).indices
 			elite_value, elite_actions = value[elite_idxs], actions[:, elite_idxs]
 
