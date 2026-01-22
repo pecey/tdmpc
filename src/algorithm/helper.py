@@ -201,34 +201,47 @@ class ReplayBuffer():
 		dtype = torch.float32 if cfg.modality == 'state' else torch.uint8
 		obs_shape = cfg.obs_shape if cfg.modality == 'state' else (3, *cfg.obs_shape[-2:])
 		self._obs = torch.empty((self.capacity+1, *obs_shape), dtype=dtype, device=self.device)
-		self._last_obs = torch.empty((self.capacity//cfg.episode_length, *cfg.obs_shape), dtype=dtype, device=self.device)
+		self._last_obs = torch.empty((self.capacity, *cfg.obs_shape), dtype=dtype, device=self.device)
 		self._action = torch.empty((self.capacity, cfg.action_dim), dtype=torch.float32, device=self.device)
 		self._reward = torch.empty((self.capacity,), dtype=torch.float32, device=self.device)
 		self._priorities = torch.ones((self.capacity,), dtype=torch.float32, device=self.device)
+		self._episode = torch.zeros((self.capacity,), dtype=torch.int32, device=self.device)
 		self._eps = 1e-6
 		self._full = False
 		self.idx = 0
+		self.n_episode = 0
 
 	def __add__(self, episode: Episode):
 		self.add(episode)
 		return self
 
 	def add(self, episode: Episode):
-		self._obs[self.idx:self.idx+self.cfg.episode_length] = episode.obs[:-1] if self.cfg.modality == 'state' else episode.obs[:-1, -3:]
-		self._last_obs[self.idx//self.cfg.episode_length] = episode.obs[-1]
-		self._action[self.idx:self.idx+self.cfg.episode_length] = episode.action
-		self._reward[self.idx:self.idx+self.cfg.episode_length] = episode.reward
+		print("Adding episode to replay buffer")
+		print(f"Current idx: {episode._idx}")
+		print(f"Episode length: {len(episode)}")
+		episode_length = len(episode)
+		episode_obs = episode.obs[:episode_length+1]
+		self._obs[self.idx:self.idx+episode_length] = episode_obs[:-1] #if self.cfg.modality == 'state' else episode.obs[:-1, -3:]
+		self._last_obs[self.n_episode] = episode_obs[-1]
+		self._action[self.idx:self.idx+episode_length] = episode.action[:episode_length]
+		self._reward[self.idx:self.idx+episode_length] = episode.reward[:episode_length]
+		self._episode[self.idx:self.idx+episode_length] = self.n_episode
+		self.n_episode += 1
+		print(f"Obs: {len(episode_obs)}")
+		print(f"Actions: {len(episode.action[:episode_length])}")
+		print(f"Rewards: {len(episode.reward[:episode_length])}")
+
 		if self._full:
 			max_priority = self._priorities.max().to(self.device).item()
 		else:
 			max_priority = 1. if self.idx == 0 else self._priorities[:self.idx].max().to(self.device).item()
 		print(f"Max priority for new episode: {max_priority}")
-		mask = torch.arange(self.cfg.episode_length) >= self.cfg.episode_length-self.cfg.horizon
-		new_priorities = torch.full((self.cfg.episode_length,), max_priority, device=self.device)
+		mask = torch.arange(episode_length) >= episode_length - self.cfg.horizon
+		new_priorities = torch.full((episode_length,), max_priority, device=self.device)
 		new_priorities[mask] = 0
-		self._priorities[self.idx:self.idx+self.cfg.episode_length] = new_priorities
+		self._priorities[self.idx:self.idx+episode_length] = new_priorities
 		
-		self.idx = (self.idx + self.cfg.episode_length) % self.capacity
+		self.idx = (self.idx + episode_length) % self.capacity
 		self._full = self._full or self.idx == 0
 
 	def update_priorities(self, idxs, priorities):
@@ -237,15 +250,15 @@ class ReplayBuffer():
 	def _get_obs(self, arr, idxs):
 		if self.cfg.modality == 'state':
 			return arr[idxs]
-		obs = torch.empty((self.cfg.batch_size, 3*self.cfg.frame_stack, *arr.shape[-2:]), dtype=arr.dtype, device=torch.device('cuda'))
-		obs[:, -3:] = arr[idxs].cuda()
-		_idxs = idxs.clone()
-		mask = torch.ones_like(_idxs, dtype=torch.bool)
-		for i in range(1, self.cfg.frame_stack):
-			mask[_idxs % self.cfg.episode_length == 0] = False
-			_idxs[mask] -= 1
-			obs[:, -(i+1)*3:-i*3] = arr[_idxs].cuda()
-		return obs.float()
+		# obs = torch.empty((self.cfg.batch_size, 3*self.cfg.frame_stack, *arr.shape[-2:]), dtype=arr.dtype, device=torch.device('cuda'))
+		# obs[:, -3:] = arr[idxs].cuda()
+		# _idxs = idxs.clone()
+		# mask = torch.ones_like(_idxs, dtype=torch.bool)
+		# for i in range(1, self.cfg.frame_stack):
+		# 	mask[_idxs % self.cfg.episode_length == 0] = False
+		# 	_idxs[mask] -= 1
+		# 	obs[:, -(i+1)*3:-i*3] = arr[_idxs].cuda()
+		# return obs.float()
 
 	def sample(self):
 		probs = (self._priorities if self._full else self._priorities[:self.idx]) ** self.cfg.per_alpha
@@ -273,8 +286,9 @@ class ReplayBuffer():
 			action[t] = self._action[_idxs]
 			reward[t] = self._reward[_idxs]
 
-		mask = (_idxs+1) % self.cfg.episode_length == 0
-		next_obs[-1, mask] = self._last_obs[_idxs[mask]//self.cfg.episode_length].cuda().float()
+		# If _idxs+1 crosses episode boundary, we replace next_obs with last_obs
+		mask = self._episode[(_idxs+1)] != self._episode[_idxs]
+		next_obs[-1, mask] = self._last_obs[self._episode[_idxs[mask]].long()].cuda().float()
 		if not action.is_cuda:
 			action, reward, idxs, weights = \
 				action.cuda(), reward.cuda(), idxs.cuda(), weights.cuda()

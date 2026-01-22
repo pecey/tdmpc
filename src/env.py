@@ -38,6 +38,7 @@ class TemporallyExtendedActionWrapper(dm_env.Environment):
 		discount = 1.0
 		# Always perform one step
 		repeat = np.maximum((t//self._dt).astype(np.int32), 1)
+		# print(f"[TemporallyExtendedActionWrapper] Action : {action}, Repeat: {repeat}")
 		for _ in range(repeat):
 			self.t += 1
 			time_step = self._env.step(ac)
@@ -72,6 +73,7 @@ class ActionRepeatWrapper(dm_env.Environment):
 		reward = 0.0
 		discount = 1.0
 		for i in range(self._num_repeats):
+			self.t += 1
 			time_step = self._env.step(action)
 			reward += (time_step.reward or 0.0) * discount
 			discount *= time_step.discount
@@ -87,6 +89,7 @@ class ActionRepeatWrapper(dm_env.Environment):
 		return self._env.action_spec()
 
 	def reset(self, seed=None, options=None):
+		self.t = 0
 		# print(type(self._env))
 		return self._env.reset(seed=seed, options=options)
 
@@ -300,6 +303,7 @@ class DefaultDictWrapper(gym.Wrapper):
 		gym.Wrapper.__init__(self, env)
 
 	def step(self, action):
+		# print(f"[DefaultDictWrapper] Action : {action}")
 		obs, reward, done, info = self.env.step(action)
 		# print(obs.shape)
 		return obs, reward, False, done, defaultdict(float, info)
@@ -440,6 +444,8 @@ class ActionScaleWrapper(dm_env.Environment):
     self._transform = transform
 
   def step(self, action):
+    # print(f"[ActionScaleWrapper] Action : {action}")
+    # print(f"[ActionScaleWrapper] After transform - Action : {self._transform(action)}")
     return self._env.step(self._transform(action))
 
   def reset(self, seed=None, options=None):

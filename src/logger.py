@@ -147,6 +147,7 @@ class Logger(object):
 
 	def log(self, d, category='train'):
 		assert category in {'train', 'eval'}
+		print(d)
 		if self._wandb is not None:
 			for k,v in d.items():
 				self._wandb.log({category + '/' + k: v}, step=d['env_step'])

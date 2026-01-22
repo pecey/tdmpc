@@ -22,11 +22,14 @@ plt.rcParams['axes.autolimit_mode'] = 'round_numbers'
 # color_mapping = {"Single": "#1f77b4", 
 #                  "Separate": "#2ca02c"}
 
-
 color_mapping = {"PV": "#1f77b4", 
                  "P": "#ff0318",
                  "V": "#ff7f03",
-                 "None": "#2ca02c"}
+                 "None": "#2ca02c",
+                 "AR": "#1f77b4",
+                 "TEA": "#9467bd", 
+                 "TEA (d=10)": "#8f561d"
+                 }
 
 column_mapping = {"episode_reward": "Score", 
                   "episode": "Episode",
@@ -42,7 +45,10 @@ def running_average(data, n):
 def plot_grouped_run_with_smoothing(results_path, data, col):
     # n = smoothing window
     for n in [5, 10]:
-        path = f"{results_path}/grouped/{col}_grouped_smooth_{n}.pdf"
+        if ADD_LEGEND:
+            path = f"{results_path}/grouped/{col}_grouped_smooth_{n}_legend.pdf"
+        else:
+            path = f"{results_path}/grouped/{col}_grouped_smooth_{n}.pdf"
         plot_grouped_runs(data, True, col, path, n)
 
 def plot_grouped_runs_without_smoothing(results_path, data, col):
@@ -106,6 +112,7 @@ def plot_grouped_runs(data, smoothing, col, path, n):
     plt.tight_layout()
     if ADD_LEGEND:
         plt.legend()
+
     plt.title(title)
     plt.savefig(path, format='pdf', bbox_inches='tight')
     plt.close()
@@ -196,18 +203,17 @@ def get_data_from_group(api, project, group_name, use_cached=False):
 api = wandb.Api()
 entity = "pecey"
 
-project = "tdmpc-cheetah-run"
-groups = {"PV": "cheetah-run-state-using-ac-repeats-with-policy-and-value-1768876764",
-          "P": "cheetah-run-state-using-ac-repeats-with-policy-and-without-value-1768876764",
-          "V": "cheetah-run-state-using-ac-repeats-without-policy-and-with-value-1768876765",
-          "None": "cheetah-run-state-using-ac-repeats-without-policy-and-value-1768876764"
+project = "tdmpc-hopper-hop"
+groups = {"AR": "hopper-hop-state-using-ac-repeats-without-policy-and-value-1768876764",
+          "TEA": "hopper-hop-state-using-tea-without-policy-and-value-1768940730",
+          "TEA (d=10)" : "hopper-hop-state-using-tea-without-policy-and-value-d-10-1769024551",
           }
-results_dir = "cheetah-run-using-ac-repeats-1768876764"
-title="Cheetah Run"
+results_dir = "hopper-hop-using-teas-wo-policy-and-value-function-1768876764"
+title="Hopper Hop"
 
 DATA_FROM_GROUP = True
-ADD_LEGEND = True
-force_download = True
+ADD_LEGEND = False
+force_download = False
 
 results_path = f"/N/u/palchatt/BigRed200/tdmpc/results/{project}/{results_dir}"
 os.makedirs(f"{results_path}/individual", exist_ok=True)

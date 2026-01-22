@@ -64,7 +64,7 @@ def train(cfg):
 	use_val_backup = cfg.use_val_backup
 
 	training = True
-	step = 0
+	step, env_step = 0, 0
 	while episode_idx < 500:
 		# Collect trajectory
 		obs = env.reset(seed = cfg.seed + episode_idx)
@@ -90,12 +90,14 @@ def train(cfg):
 		# Log training episode
 		episode_idx += 1
 		decision_step = int(step)
-		env_step = int(step*cfg.action_repeat)
+		# Obtain the number of environment steps from TEAWrapper or ActionRepeatWrapper.
+		env_step += int(env.env.env._env._env.t)
 		common_metrics = {
 			'episode': episode_idx,
 			'step': step,
 			'env_step': env_step,
 			'decision_step': decision_step,
+			'decision_in_episode': len(episode),
 			'total_time': time.time() - start_time,
 			'episode_reward': episode.cumulative_reward}
 		train_metrics.update(common_metrics)
